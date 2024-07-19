@@ -15,11 +15,6 @@ from sklearn.model_selection import train_test_split
 
 print("\n\n\n\n")
 
-# we have a csv of image links and the species of butterfly in the image
-# we can make a conv net to train on each image as we iterate through the csv, calulate error with the labels
-# after using the labels, test on the other csv and then record the accuracy
-# bonus is to use unsupervised learning
-
 img_height = 224
 img_width = 224
 num_classes = 75
@@ -33,14 +28,15 @@ model = Sequential([
   layers.Dropout(0.2),
   layers.Conv2D(64, 3, padding='same', activation='relu'),
   layers.MaxPooling2D(),
+  layers.Dropout(0.4),
   layers.Flatten(),
   layers.Dense(128, activation='relu'),
   layers.Dense(num_classes)
 ])
 model.compile(\
-    optimizer='adam',\
-    loss = keras.losses.CategoricalCrossentropy(from_logits=True),\
-    metrics=[keras.metrics.CategoricalAccuracy()]\
+    optimizer='adam',
+    loss = keras.losses.CategoricalCrossentropy(from_logits=True),
+    metrics=[keras.metrics.CategoricalAccuracy()]
     )
 
 dir = "data/butterflyData/train/"
@@ -49,7 +45,7 @@ files = data['filename']
 labels = pd.get_dummies(data, columns=["label"], dtype=int)
 labels = labels.drop("filename", axis=1)
 
-X_train, X_test, y_train, y_test  = train_test_split(files, labels, shuffle = False)
+X_train, X_test, y_train, y_test  = train_test_split(files, labels, shuffle = True)
 
 epochs = 10
 batch_size = 64
@@ -57,7 +53,7 @@ batch_size = 64
 # /////// ITERATIVE FITTING ///////
 for j in range(epochs):
     print(f"    epoch {j+1}/{epochs}")
-    # shuffle(training_imgs, training_classes)
+    X_train, X_test, y_train, y_test  = train_test_split(files, labels, shuffle = True)
     X = []
     y = []
     for i in range(len(X_train)):
@@ -72,9 +68,9 @@ for j in range(epochs):
         X.append(img)
         y.append(y_train.iloc[i])
 
+# //////// TESTING /////////
 score = 0
-iterations = 64
-for i in range(iterations):
+for i in range(len(X_test)):
     img = PIL.Image.open(dir + X_test.iloc[i])
     prediction = model.predict(np.expand_dims(keras.utils.img_to_array(img,dtype=float ),axis = 0))
     true_class = labels.columns[np.argmax(y_test.iloc[i])]
@@ -84,5 +80,5 @@ for i in range(iterations):
     # if (y_test.iloc[i].to_numpy().all() == prediction.all()):
     if (true_class == predicted_class):
         score+=1
-print(f"accuracy: {100 * (score / iterations)}%")
+print(f"accuracy: {100 * (score / len(X_test))}%")
 
