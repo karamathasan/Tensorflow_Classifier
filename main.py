@@ -10,9 +10,8 @@ import numpy as np
 
 import PIL
 import PIL.Image
-import pathlib
 
-from helper import shuffle, dataSplit
+from sklearn.model_selection import train_test_split
 
 print("\n\n\n\n")
 
@@ -20,7 +19,6 @@ print("\n\n\n\n")
 # we can make a conv net to train on each image as we iterate through the csv, calulate error with the labels
 # after using the labels, test on the other csv and then record the accuracy
 # bonus is to use unsupervised learning
-data = pd.read_csv("data/butterflyData/Training_set.csv")
 
 img_height = 224
 img_width = 224
@@ -32,8 +30,9 @@ model = Sequential([
   layers.MaxPooling2D(),
   layers.Conv2D(32, 3, padding='same', activation='relu'),
   layers.MaxPooling2D(),
-#   layers.Conv2D(64, 3, padding='same', activation='relu'),
-#   layers.MaxPooling2D(),
+  layers.Dropout(0.2),
+  layers.Conv2D(64, 3, padding='same', activation='relu'),
+  layers.MaxPooling2D(),
   layers.Flatten(),
   layers.Dense(128, activation='relu'),
   layers.Dense(num_classes)
@@ -44,50 +43,46 @@ model.compile(\
     metrics=[keras.metrics.CategoricalAccuracy()]\
     )
 
-dir = pathlib.Path("data/butterflyData")
-imgs = list(dir.glob('train/*'))
-# test_imgs = list(dir.glob('test/*'))
+dir = "data/butterflyData/train/"
+data = pd.read_csv("data/butterflyData/Training_set.csv")
+files = data['filename']
+labels = pd.get_dummies(data, columns=["label"], dtype=int)
+labels = labels.drop("filename", axis=1)
 
-classification = pd.get_dummies(data, columns=["label"], dtype=int)
-classification = classification.drop("filename", axis=1)
+X_train, X_test, y_train, y_test  = train_test_split(files, labels, shuffle = False)
 
-training_imgs, training_classes, testing_imgs, testing_classes = dataSplit(imgs, classification)
+epochs = 10
+batch_size = 64
 
 # /////// ITERATIVE FITTING ///////
-for j in range(1):
-    shuffle(training_imgs, training_classes)
-    # for i in range(len(training_imgs)):
-    for i in range(100):
-        img = PIL.Image.open(training_imgs[i])
+for j in range(epochs):
+    print(f"    epoch {j+1}/{epochs}")
+    # shuffle(training_imgs, training_classes)
+    X = []
+    y = []
+    for i in range(len(X_train)):
+        if (i % batch_size == 0 or i == len(X_train)-1) and i != 0: 
+            X = np.array(X)
+            y = np.array(y)
+            model.fit(X,y, batch_size=batch_size)
+            X = []
+            y = []
+        img = PIL.Image.open(dir + X_train.iloc[i])
         img = keras.utils.img_to_array(img)
-        y = training_classes.iloc[i].transpose()
-
-        img = np.expand_dims(img, axis = 0)
-        y = np.expand_dims(y, axis = 0)
-        model.fit(img,y,batch_size=1)
+        X.append(img)
+        y.append(y_train.iloc[i])
 
 score = 0
-iterations = 100
+iterations = 64
 for i in range(iterations):
-    img = PIL.Image.open(testing_imgs[i])
+    img = PIL.Image.open(dir + X_test.iloc[i])
     prediction = model.predict(np.expand_dims(keras.utils.img_to_array(img,dtype=float ),axis = 0))
-    true_class = classification.columns[np.argmax(testing_classes.iloc[i])]
-    predicted_class = classification.columns[np.argmax(prediction)]
-    # print(f'    prediction: {prediction}')
-    print()
+    true_class = labels.columns[np.argmax(y_test.iloc[i])]
+    predicted_class = labels.columns[np.argmax(prediction)]
+    print(f"    location: {X_test.iloc[i]}")
     print(f'    true class: {true_class}, predicted class: {predicted_class}')
-    if (testing_classes.iloc[i].to_numpy().all() == prediction.all()):
+    # if (y_test.iloc[i].to_numpy().all() == prediction.all()):
+    if (true_class == predicted_class):
         score+=1
 print(f"accuracy: {100 * (score / iterations)}%")
 
-# for i in range(10):
-#     img = PIL.Image.open(testing_imgs[i])
-#     prediction = model.predict(np.expand_dims(keras.utils.img_to_array(img, dtype=float),axis=0))
-#     max_index = np.argmax(prediction)
-
-#     prediction = classification.columns[max_index]
-#     img = keras.utils.img_to_array(img, dtype=int)
-
-#     plt.imshow(img)
-#     plt.title(prediction)
-#     plt.show()
